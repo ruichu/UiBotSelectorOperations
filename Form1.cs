@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using Deputy.Robot.Design;
@@ -79,6 +80,43 @@ namespace test
             {   //同上，获取到的 UiObject 是一个Object4Record对象，可以通过UiObject.ElementRegion获取到元素的Region，其中还有其他属性，可以自己留意一下
                 found_region.Text = UiObject.ElementRegion.ToString();
             }
+        }
+
+        private void GetChildren(UiNode[] children, StreamWriter file, int indent)
+        {
+            for (var i = 0; i < children.Length; i++)
+            {
+                var child = children[i];
+
+                if(child != null && child.Data != null)
+                {
+                    for (var j = 0; j < indent; j++)
+                    {
+                        file.Write("\t");
+                    }
+                    
+                    file.WriteLine(child.Data.NodeName);
+                }
+
+                if (child.Children.Length > 0)
+                {
+                    GetChildren(child.Children, file, indent + 1);
+                }
+            }
+        }
+
+        private void GetTree_Click(object sender, EventArgs e)
+        {
+            var root = UiNode.Root;
+
+            //open an file to write string 
+            StreamWriter file = new StreamWriter("tree.txt");
+
+            GetChildren(root.Children, file, 0);
+
+            file.Close();
+
+            MessageBox.Show("Tree has been saved to tree.txt");
         }
     }
 }
