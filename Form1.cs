@@ -7,11 +7,17 @@ using Deputy.Robot.Support;
 using Deputy.Base.Native;
 using System.Windows.Automation;
 using Newtonsoft.Json.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using Deputy.Robot;
 
 namespace test
 {
     public partial class Form1 : Form
     {
+        SimpleHttpServer _server;
+
         public Form1()
         {
             InitializeComponent();
@@ -82,41 +88,69 @@ namespace test
             }
         }
 
-        private void GetChildren(UiNode[] children, StreamWriter file, int indent)
+        static public object GetChildren(UiNode[] children)
         {
+            var output = new List<object>();
             for (var i = 0; i < children.Length; i++)
             {
                 var child = children[i];
+                object childData = null;
 
-                if(child != null && child.Data != null)
-                {
-                    for (var j = 0; j < indent; j++)
-                    {
-                        file.Write("\t");
-                    }
-                    
-                    file.WriteLine(child.Data.NodeName);
-                }
+                if (child == null || child.Data == null)
+                    continue;
 
                 if (child.Children.Length > 0)
                 {
-                    GetChildren(child.Children, file, indent + 1);
+                    childData = GetChildren(child.Children);
                 }
+
+                if (childData == null)
+                    output.Add(new { Name = child.Data.NodeName, Region = child.Data.ElementRegion });
+                else
+                    output.Add(new { Name = child.Data.NodeName, Region = child.Data.ElementRegion, Process = child.Data.ProcessName, Child = childData });
             }
+            return output;
         }
 
         private void GetTree_Click(object sender, EventArgs e)
         {
             var root = UiNode.Root;
+            var output = GetChildren(root.Children);
 
             //open an file to write string 
-            StreamWriter file = new StreamWriter("tree.txt");
+            StreamWriter file = new StreamWriter("tree.json");
 
-            GetChildren(root.Children, file, 0);
+            //convert output into readable json string and write it into file
+            file.Write(Newtonsoft.Json.JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented));
 
             file.Close();
 
-            MessageBox.Show("Tree has been saved to tree.txt");
+            MessageBox.Show("Tree has been saved to tree.json");
+        }
+
+        private async void Form1_Load(object sender, EventArgs e)
+        {
+            //start an http server，and response API requests
+            string serverPrefix = "localhost:9000"; // 你可以选择任何可用的端口号
+            _server = new SimpleHttpServer(serverPrefix);
+
+            try
+            {
+                await _server.StartServerAsync();
+            }
+            catch (HttpListenerException ex)
+            {
+                Console.WriteLine("HttpListener exception: " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("An unexpected exception: " + ex.Message);
+            }
+        }
+
+        private void Form1_FormClosing(object sender, EventArgs e)
+        {
+            _server.StopServer();
         }
     }
 }
