@@ -11,11 +11,16 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Deputy.Robot;
+using System.Runtime.InteropServices;
 
 namespace test
 {
     public partial class Form1 : Form
     {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool IsWindowVisible(IntPtr hWnd);
+
         SimpleHttpServer _server;
 
         public Form1()
@@ -29,8 +34,8 @@ namespace test
             IntPtr hWnd = User32.WindowFromPhysicalPoint(new User32.POINT(X, Y));
             IHoverRegion hoverRegion = null;
             var hoverRegionFactory = new Dictionary<RecordFramework, Func<IHoverRegion>>{
-                {RecordFramework.MSAA,() =>new DesktopHoverRegion(hWnd,X,Y)  },
-                {RecordFramework.UIA,() =>new DesktopUIAHoverRegion(hWnd,X,Y)  }};
+                {RecordFramework.MSAA,() => new DesktopHoverRegion(hWnd,X,Y)  },
+                {RecordFramework.UIA,() => new DesktopUIAHoverRegion(hWnd,X,Y)  }};
             try
             {
                 hoverRegion = SupportFactory._chain.Create(hWnd, (SupportLoader loader) => { return new GeneralHoverRegion(loader, hWnd, X, Y); });
@@ -98,6 +103,11 @@ namespace test
 
                 if (child == null || child.Data == null)
                     continue;
+
+                if(child.Data.WindowHandle != IntPtr.Zero && !IsWindowVisible(child.Data.WindowHandle))
+                {   //如果窗口不可见，就不列入结果中
+                    continue;
+                }
 
                 if (child.Children.Length > 0)
                 {
