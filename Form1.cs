@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Deputy.Robot;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace test
 {
@@ -20,6 +21,16 @@ namespace test
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool IsWindowVisible(IntPtr hWnd);
+
+        public const int GW_HWNDNEXT = 2; // The next window is below the specified window
+        public const int GW_HWNDPREV = 3; // The previous window is above
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, EntryPoint = "GetWindow", SetLastError = true)]
+        public static extern IntPtr GetNextWindow(IntPtr hwnd, [MarshalAs(UnmanagedType.U4)] int wFlag);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr GetTopWindow(IntPtr hWnd);
+
 
         SimpleHttpServer _server;
 
@@ -93,7 +104,23 @@ namespace test
             }
         }
 
-        static public object GetChildren(UiNode[] children)
+        static int GetZOrder(IntPtr hwndTarget)
+        {
+            int z = 0;
+            IntPtr hwnd = GetTopWindow((IntPtr)null);
+            while (hwnd != null)
+            {
+                if (hwnd == hwndTarget)
+                {
+                    return z;
+                }
+                hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
+                z++;
+            }
+            return -1; // 窗口未找到
+        }
+
+        static public object GetChildren(UiNode[] children, int depth = 0)
         {
             var output = new List<object>();
             for (var i = 0; i < children.Length; i++)
@@ -109,15 +136,29 @@ namespace test
                     continue;
                 }
 
+                //如果元素的Region不在屏幕上，就不列入结果中
+                var elementRegion = child.Data.ElementRegion;
+                if (elementRegion == null)
+                    continue;
+                if(elementRegion.Left + elementRegion.Width <= 0 || elementRegion.Top + elementRegion.Height <= 0)
+                    continue;
+
                 if (child.Children.Length > 0)
                 {
-                    childData = GetChildren(child.Children);
+                    childData = GetChildren(child.Children, depth + 1);
                 }
 
                 if (childData == null)
-                    output.Add(new { Name = child.Data.NodeName, Region = child.Data.ElementRegion });
+                {   //叶节点
+                    output.Add(new { Name = child.Data.NodeName, Region = elementRegion });
+                }
                 else
-                    output.Add(new { Name = child.Data.NodeName, Region = child.Data.ElementRegion, Process = child.Data.ProcessName, Child = childData });
+                {
+                    if(depth == 0)
+                        output.Add(new { Name = child.Data.NodeName, Region = elementRegion, ZOrder = GetZOrder(child.Data.WindowHandle), Process = child.Data.ProcessName, Child = childData });
+                    else
+                        output.Add(new { Name = child.Data.NodeName, Region = elementRegion, Process = child.Data.ProcessName, Child = childData });
+                }
             }
             return output;
         }
